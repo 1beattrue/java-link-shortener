@@ -1,0 +1,33 @@
+name: Java CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build, test and check style
+        run: mvn --batch-mode --no-transfer-progress clean verify
+      - name: Run packaged CLI
+        shell: bash
+        run: |
+          db_dir="$(mktemp -d)"
+          sed "s|^database.path=.*|database.path=$db_dir/links.db|" config/application.properties > "$db_dir/ci.properties"
+          output="$(printf 'create https://example.org 2\nexit\n' | java -jar target/link-shortener.jar "$db_dir/ci.properties")"
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -Eq 'short/[a-zA-Z0-9]{8} → https://example\.org'
